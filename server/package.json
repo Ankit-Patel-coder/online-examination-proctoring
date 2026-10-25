@@ -1,0 +1,20 @@
+{
+  "name": "exam-proctoring-server",
+  "version": "1.0.0",
+  "description": "Online Examination and Proctoring System — Backend API",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "seed:admin": "node scripts/seedAdmin.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --detectOpenHandles",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch --runInBand"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": ["**/tests/**/*.test.js"]
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
