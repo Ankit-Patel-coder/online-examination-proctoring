@@ -76,6 +76,16 @@ if (env.NODE_ENV === 'development') {
   app.use(morgan('combined'));
 }
 
+// ─── Root Endpoint ────────────────────────────────────────────────────────────
+app.all('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Online Examination & Proctoring System API is live and healthy',
+    version: '1.0.0',
+    healthCheck: '/api/health',
+  });
+});
+
 // ─── Health check & Kubernetes / Cloud Readiness Probe ────────────────────────
 app.get('/api/health', (req, res) => {
   const isDbReady = mongoose.connection.readyState === 1;
