@@ -52,10 +52,15 @@ const examBaseSchema = z.object({
   instructions: z.string().trim().max(5000).optional(),
 });
 
-const createExamSchema = examBaseSchema.refine(
-  data => new Date(data.endTime) > new Date(data.startTime),
-  { message: 'End time must be after start time', path: ['endTime'] }
-);
+const createExamSchema = examBaseSchema
+  .refine(
+    data => new Date(data.endTime) > new Date(data.startTime),
+    { message: 'End time must be after start time', path: ['endTime'] }
+  )
+  .refine(
+    data => new Date(data.endTime) >= new Date(new Date(data.startTime).getTime() + data.durationMinutes * 60 * 1000),
+    { message: 'End time must allow at least the exam duration after start time', path: ['endTime'] }
+  );
 
 // For updates: allow partial fields — no cross-field refine needed since fields may be absent
 const updateExamSchema = examBaseSchema.partial();

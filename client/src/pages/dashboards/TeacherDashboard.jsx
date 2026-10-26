@@ -71,7 +71,14 @@ function ExamFormModal({ isOpen, onClose, onSaved, initial }) {
           endTime: initial.endTime ? new Date(initial.endTime).toISOString().slice(0, 16) : '',
         });
       } else {
-        setForm(blank);
+        const now = new Date();
+        const startLocal = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        const endLocal = new Date(now.getTime() + 120 * 60000 - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        setForm({
+          ...blank,
+          startTime: startLocal,
+          endTime: endLocal,
+        });
       }
       setError('');
     }
@@ -91,13 +98,36 @@ function ExamFormModal({ isOpen, onClose, onSaved, initial }) {
   const handleSave = async (e) => {
     e.preventDefault();
     setError('');
+
+    const start = new Date(form.startTime);
+    const end = new Date(form.endTime);
+    const dur = Number(form.durationMinutes);
+
+    if (!form.startTime || isNaN(start.getTime())) {
+      setError('Please select a valid start date and time.');
+      return;
+    }
+    if (!form.endTime || isNaN(end.getTime())) {
+      setError('Please select a valid end date and time.');
+      return;
+    }
+    if (end <= start) {
+      setError('End time must be after start time.');
+      return;
+    }
+    const minEnd = new Date(start.getTime() + dur * 60 * 1000);
+    if (end < minEnd) {
+      setError(`End time must allow at least the exam duration (${dur} minutes). Earliest permitted end time is ${minEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`);
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = {
         ...form,
-        startTime: new Date(form.startTime).toISOString(),
-        endTime: new Date(form.endTime).toISOString(),
-        durationMinutes: Number(form.durationMinutes),
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+        durationMinutes: dur,
         maximumMarks: Number(form.maximumMarks),
         attemptLimit: Number(form.attemptLimit),
       };
@@ -107,7 +137,11 @@ function ExamFormModal({ isOpen, onClose, onSaved, initial }) {
       onSaved(res.data.data);
       onClose();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to save exam');
+      const serverMsg =
+        err?.response?.data?.errors?.[0]?.message ||
+        err?.response?.data?.message ||
+        'Failed to save exam';
+      setError(serverMsg);
     } finally {
       setSaving(false);
     }

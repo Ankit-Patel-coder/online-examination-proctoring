@@ -1,5 +1,6 @@
 // server/src/models/Exam.js
 const mongoose = require('mongoose');
+const ApiError = require('../utils/ApiError');
 
 const examSchema = new mongoose.Schema(
   {
@@ -103,11 +104,11 @@ examSchema.index({ status: 1, startTime: 1, endTime: 1 });
 examSchema.pre('save', async function () {
   if (this.startTime && this.endTime) {
     if (this.endTime <= this.startTime) {
-      throw new Error('End time must be after start time');
+      throw ApiError.badRequest('End time must be after start time');
     }
     const minEnd = new Date(this.startTime.getTime() + this.durationMinutes * 60 * 1000);
     if (this.endTime < minEnd) {
-      throw new Error('End time must allow at least the exam duration after start time');
+      throw ApiError.badRequest('End time must allow at least the exam duration after start time');
     }
   }
 });
