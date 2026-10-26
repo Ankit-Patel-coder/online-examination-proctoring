@@ -75,6 +75,29 @@ export default function StudentDashboard() {
     setIsPreflightOpen(true);
   };
 
+  const handleStartExam = async () => {
+    if (!selectedExam || !consentChecked) return;
+    try {
+      setIsStarting(true);
+      setError('');
+      const res = await attemptApi.start(selectedExam._id);
+      const data = res.data.data;
+      const attemptId = data.attempt?._id || data._id;
+      if (!attemptId) {
+        throw new Error('Unable to retrieve examination session ID.');
+      }
+      setIsPreflightOpen(false);
+      navigate(`/student/exam/${attemptId}`);
+    } catch (err) {
+      console.error('Failed to start examination:', err);
+      const msg = err.response?.data?.message || err.message || 'Failed to start examination attempt. Please try again.';
+      setError(msg);
+      setIsPreflightOpen(false);
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
   const handleOpenResultReview = async (att) => {
     try {
       setViewingResult(att);
@@ -243,6 +266,10 @@ export default function StudentDashboard() {
                   const isEnded = exam.endTime && now > new Date(exam.endTime);
                   const isActive = isStarted && !isEnded;
 
+                  const activeAttempt = myAttempts.find(
+                    a => (a.examId?._id === exam._id || a.examId === exam._id) && a.status === 'IN_PROGRESS'
+                  );
+
                   return (
                     <div
                       key={exam._id}
@@ -253,7 +280,12 @@ export default function StudentDashboard() {
                           <h3 className="text-lg font-bold text-surface-900 leading-snug">
                             {exam.title}
                           </h3>
-                          {isActive ? (
+                          {activeAttempt ? (
+                            <span className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 shrink-0">
+                              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                              In Progress
+                            </span>
+                          ) : isActive ? (
                             <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 shrink-0">
                               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                               Active Now
@@ -318,17 +350,30 @@ export default function StudentDashboard() {
                         <span className="text-xs text-surface-500">
                           Ends: {fmtDate(exam.endTime)}
                         </span>
-                        <Button
-                          id="open-preflight-btn"
-                          variant="primary"
-                          size="sm"
-                          disabled={!isActive}
-                          onClick={() => handleOpenPreflight(exam)}
-                          className="bg-primary-600 hover:bg-primary-500 text-white font-medium shadow-md shadow-primary-600/20"
-                        >
-                          <Play className="w-3.5 h-3.5 mr-1.5" />
-                          Take Examination
-                        </Button>
+                        {activeAttempt ? (
+                          <Button
+                            id={`resume-exam-${exam._id}`}
+                            variant="primary"
+                            size="sm"
+                            onClick={() => navigate(`/student/exam/${activeAttempt._id}`)}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium shadow-md shadow-emerald-600/20"
+                          >
+                            <Play className="w-3.5 h-3.5 mr-1.5" />
+                            Resume Exam
+                          </Button>
+                        ) : (
+                          <Button
+                            id="open-preflight-btn"
+                            variant="primary"
+                            size="sm"
+                            disabled={!isActive}
+                            onClick={() => handleOpenPreflight(exam)}
+                            className="bg-primary-600 hover:bg-primary-500 text-white font-medium shadow-md shadow-primary-600/20"
+                          >
+                            <Play className="w-3.5 h-3.5 mr-1.5" />
+                            Take Examination
+                          </Button>
+                        )}
                       </div>
                     </div>
                   );
@@ -385,7 +430,8 @@ export default function StudentDashboard() {
                               <Badge
                                 variant={
                                   att.status === 'SUBMITTED' ? 'blue' :
-                                  att.status === 'EVALUATED' ? 'green' : 'red'
+                                  att.status === 'EVALUATED' ? 'green' :
+                                  att.status === 'IN_PROGRESS' ? 'yellow' : 'red'
                                 }
                               >
                                 {att.status}
@@ -393,7 +439,7 @@ export default function StudentDashboard() {
                             </td>
                             <td className="px-6 py-4">
                               <span className="text-xs font-medium text-surface-600">
-                                {att.evaluationStatus?.replace('_', ' ') || 'PENDING'}
+                                {att.status === 'IN_PROGRESS' ? 'In Progress' : att.evaluationStatus?.replace('_', ' ') || 'PENDING'}
                               </span>
                             </td>
                             <td className="px-6 py-4">
@@ -402,20 +448,35 @@ export default function StudentDashboard() {
                                   {att.score} / {att.maxScore || att.examId?.maximumMarks || 0}
                                 </span>
                               ) : (
-                                <span className="text-xs text-surface-400 italic">Pending Release</span>
+                                <span className="text-xs text-surface-400 italic">
+                                  {att.status === 'IN_PROGRESS' ? 'Exam in progress' : 'Pending Release'}
+                                </span>
                               )}
                             </td>
                             <td className="px-6 py-4 text-right">
-                              <Button
-                                id={`review-attempt-${att._id}`}
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => handleOpenResultReview(att)}
-                                className="text-xs py-1 px-3"
-                              >
-                                <Eye className="w-3.5 h-3.5 mr-1" />
-                                View Result
-                              </Button>
+                              {att.status === 'IN_PROGRESS' ? (
+                                <Button
+                                  id={`resume-attempt-${att._id}`}
+                                  variant="primary"
+                                  size="sm"
+                                  onClick={() => navigate(`/student/exam/${att._id}`)}
+                                  className="text-xs py-1 px-3 bg-emerald-600 hover:bg-emerald-500 text-white"
+                                >
+                                  <Play className="w-3.5 h-3.5 mr-1" />
+                                  Resume Exam
+                                </Button>
+                              ) : (
+                                <Button
+                                  id={`review-attempt-${att._id}`}
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => handleOpenResultReview(att)}
+                                  className="text-xs py-1 px-3"
+                                >
+                                  <Eye className="w-3.5 h-3.5 mr-1" />
+                                  View Result
+                                </Button>
+                              )}
                             </td>
                           </tr>
                         );
