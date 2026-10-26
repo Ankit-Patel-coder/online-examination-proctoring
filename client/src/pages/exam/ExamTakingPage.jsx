@@ -53,9 +53,27 @@ export default function ExamTakingPage() {
 
   // Refs
   const videoRef = useRef(null);
+  const floatingVideoRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const timerRef = useRef(null);
   const autoSaveDebounceRef = useRef(null);
+
+  // ─── Proctoring Violation Reporter ────────────────────────────────────────
+  const reportViolation = useCallback(async (type, desc) => {
+    try {
+      setWarningCount(prev => prev + 1);
+      setViolations(prev => [{ type, desc, time: new Date() }, ...prev]);
+      setViolationMessage(desc);
+      setShowViolationModal(true);
+
+      await attemptApi.logEvent(attemptId, {
+        eventType: type,
+        description: desc,
+      });
+    } catch (err) {
+      console.warn('Failed to report proctoring event:', err.message);
+    }
+  }, [attemptId]);
 
   // ─── Load Attempt Data ────────────────────────────────────────────────────
   useEffect(() => {
@@ -125,7 +143,8 @@ export default function ExamTakingPage() {
 
   // ─── Webcam Stream Setup ──────────────────────────────────────────────────
   useEffect(() => {
-    if (!exam?.proctoring?.webcamRequired) return;
+    const isCameraNeeded = exam?.proctoring?.enabled || exam?.proctoring?.webcamRequired;
+    if (!isCameraNeeded) return;
 
     let active = true;
 
@@ -145,10 +164,29 @@ export default function ExamTakingPage() {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
+        if (floatingVideoRef.current) {
+          floatingVideoRef.current.srcObject = stream;
+        }
         setCameraActive(true);
+
+        // Continuous monitoring for camera track interruptions
+        stream.getVideoTracks().forEach(track => {
+          track.onended = () => {
+            setCameraActive(false);
+            reportViolation('CAMERA_INTERRUPTED', 'Webcam video stream was disconnected or terminated.');
+          };
+          track.onmute = () => {
+            setCameraActive(false);
+            reportViolation('CAMERA_INTERRUPTED', 'Webcam video stream was muted.');
+          };
+          track.onunmute = () => {
+            setCameraActive(true);
+          };
+        });
       } catch (err) {
         console.warn('Webcam permission denied or camera unavailable:', err.message);
         setCameraActive(false);
+        reportViolation('CAMERA_INTERRUPTED', 'Webcam access denied or unavailable: ' + err.message);
       }
     }
 
@@ -160,7 +198,19 @@ export default function ExamTakingPage() {
         mediaStreamRef.current.getTracks().forEach(t => t.stop());
       }
     };
-  }, [exam]);
+  }, [exam, reportViolation]);
+
+  // Ensure video elements receive the stream whenever they mount or when cameraActive/loading changes
+  useEffect(() => {
+    if (mediaStreamRef.current && cameraActive) {
+      if (videoRef.current && videoRef.current.srcObject !== mediaStreamRef.current) {
+        videoRef.current.srcObject = mediaStreamRef.current;
+      }
+      if (floatingVideoRef.current && floatingVideoRef.current.srcObject !== mediaStreamRef.current) {
+        floatingVideoRef.current.srcObject = mediaStreamRef.current;
+      }
+    }
+  }, [loading, cameraActive]);
 
   // ─── Countdown Timer ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -184,22 +234,6 @@ export default function ExamTakingPage() {
   }, [loading, attempt]);
 
   // ─── Proctoring Listeners: Fullscreen & Tab Switch ─────────────────────────
-  const reportViolation = useCallback(async (type, desc) => {
-    try {
-      setWarningCount(prev => prev + 1);
-      setViolations(prev => [{ type, desc, time: new Date() }, ...prev]);
-      setViolationMessage(desc);
-      setShowViolationModal(true);
-
-      await attemptApi.logEvent(attemptId, {
-        eventType: type,
-        description: desc,
-      });
-    } catch (err) {
-      console.warn('Failed to report proctoring event:', err.message);
-    }
-  }, [attemptId]);
-
   useEffect(() => {
     if (loading || submissionResult || !exam?.proctoring?.enabled) return;
 
@@ -502,6 +536,17 @@ export default function ExamTakingPage() {
             )}
           </div>
 
+          {/* Live Proctoring Camera Indicator */}
+          {(exam?.proctoring?.enabled || exam?.proctoring?.webcamRequired) && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-surface-800 border border-surface-700">
+              <span className={`w-2 h-2 rounded-full ${cameraActive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+              <span className="text-surface-300 hidden sm:inline">Proctor Cam:</span>
+              <span className={cameraActive ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
+                {cameraActive ? 'LIVE' : 'CONNECTING'}
+              </span>
+            </div>
+          )}
+
           {/* Fullscreen button */}
           {!isFullscreen && exam?.proctoring?.fullscreenRequired && (
             <Button
@@ -672,7 +717,7 @@ export default function ExamTakingPage() {
         <aside className="w-80 border-l border-surface-800 bg-surface-900/60 p-5 flex flex-col justify-between shrink-0 overflow-y-auto hidden lg:flex">
           <div className="space-y-6">
             {/* Live Webcam Proctoring Box */}
-            {exam?.proctoring?.webcamRequired && (
+            {(exam?.proctoring?.enabled || exam?.proctoring?.webcamRequired) && (
               <div className="bg-surface-950/80 border border-surface-800 rounded-2xl p-3 shadow-inner">
                 <div className="flex items-center justify-between mb-2 px-1">
                   <div className="flex items-center gap-2 text-xs font-medium text-surface-300">
@@ -869,6 +914,36 @@ export default function ExamTakingPage() {
           </div>
         </div>
       </Modal>
+      {/* ─── Floating Picture-In-Picture Camera (Visible on screens where sidebar is hidden) ─── */}
+      {(exam?.proctoring?.enabled || exam?.proctoring?.webcamRequired) && (
+        <div className="fixed bottom-4 right-4 z-40 bg-surface-950/90 border border-surface-700/80 rounded-2xl p-2.5 shadow-2xl backdrop-blur-md w-44 sm:w-52 lg:hidden">
+          <div className="flex items-center justify-between mb-1.5 px-1">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-surface-200">
+              <Video className="w-3 h-3 text-primary-400" />
+              <span>Live Proctor Cam</span>
+            </div>
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+          </div>
+          <div className="relative aspect-video rounded-lg overflow-hidden bg-surface-900 border border-surface-800 flex items-center justify-center">
+            <video
+              ref={floatingVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover transform -scale-x-100"
+            />
+            {!cameraActive && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-900/95 text-surface-400 text-[10px] text-center p-1">
+                <VideoOff className="w-4 h-4 text-amber-400 mb-0.5" />
+                <span>Cam connecting...</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

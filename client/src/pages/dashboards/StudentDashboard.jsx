@@ -323,7 +323,7 @@ export default function StudentDashboard() {
                         {exam.proctoring?.enabled && (
                           <div className="pt-3 border-t border-surface-100 flex flex-wrap items-center gap-2">
                             <span className="text-xs font-semibold text-surface-400">Proctoring:</span>
-                            {exam.proctoring.webcamRequired && (
+                            {(exam.proctoring.webcamRequired || exam.proctoring.enabled) && (
                               <span className="flex items-center gap-1 text-[11px] font-medium text-primary-700 bg-primary-50 px-2 py-0.5 rounded-md border border-primary-200">
                                 <Video className="w-3 h-3" />
                                 Camera
@@ -520,7 +520,7 @@ export default function StudentDashboard() {
                   Proctoring & Integrity Requirements:
                 </div>
                 <div className="bg-amber-50/60 border border-amber-200/80 rounded-2xl p-4 space-y-2 text-xs text-amber-900">
-                  {selectedExam.proctoring.webcamRequired && (
+                  {(selectedExam.proctoring.webcamRequired || selectedExam.proctoring.enabled) && (
                     <div className="flex items-center gap-2">
                       <Check className="w-4 h-4 text-emerald-600 shrink-0" />
                       <span>Continuous webcam video feed is required during the test.</span>

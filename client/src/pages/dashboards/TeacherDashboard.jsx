@@ -51,7 +51,7 @@ function ExamFormModal({ isOpen, onClose, onSaved, initial }) {
     instructions: '', randomizeQuestions: false,
     negativeMarking: { enabled: false, defaultPenaltyFraction: 0.25 },
     resultRelease: { mode: 'MANUAL', showAnswerKey: false, showQuestionWise: true },
-    proctoring: { enabled: false, tabSwitchDetection: true, fullscreenRequired: false },
+    proctoring: { enabled: false, webcamRequired: true, tabSwitchDetection: true, fullscreenRequired: false },
     attemptLimit: 1,
   };
 
@@ -61,7 +61,12 @@ function ExamFormModal({ isOpen, onClose, onSaved, initial }) {
     if (isOpen) {
       if (initial) {
         setForm({
+          ...blank,
           ...initial,
+          proctoring: {
+            ...blank.proctoring,
+            ...(initial.proctoring || {}),
+          },
           startTime: initial.startTime ? new Date(initial.startTime).toISOString().slice(0, 16) : '',
           endTime: initial.endTime ? new Date(initial.endTime).toISOString().slice(0, 16) : '',
         });
@@ -163,6 +168,7 @@ function ExamFormModal({ isOpen, onClose, onSaved, initial }) {
             ['randomizeQuestions', 'Randomize question order'],
             ['negativeMarking.enabled', 'Enable negative marking'],
             ['proctoring.enabled', 'Enable proctoring'],
+            ['proctoring.webcamRequired', 'Require webcam monitoring'],
             ['proctoring.tabSwitchDetection', 'Detect tab switching'],
             ['proctoring.fullscreenRequired', 'Require fullscreen'],
           ].map(([path, label]) => {
