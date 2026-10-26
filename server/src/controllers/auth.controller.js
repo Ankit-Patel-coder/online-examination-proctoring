@@ -22,7 +22,15 @@ const issueTokensAndRespond = (res, user, statusCode = 200, message = 'Success')
   const accessToken = signAccessToken(payload);
   const refreshToken = signRefreshToken(payload);
   attachCookies(res, accessToken, refreshToken);
-  return res.status(statusCode).json({ success: true, message, data: user.toSafeObject() });
+  return res.status(statusCode).json({
+    success: true,
+    message,
+    data: {
+      ...user.toSafeObject(),
+      accessToken,
+      refreshToken,
+    },
+  });
 };
 
 // ─── Controllers ─────────────────────────────────────────────────────────────
@@ -172,7 +180,11 @@ const changePassword = async (req, res, next) => {
  */
 const refresh = async (req, res, next) => {
   try {
-    const refreshToken = req.cookies?.refresh_token;
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    const bearer = authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7).trim()
+      : null;
+    const refreshToken = req.body?.refreshToken || req.headers['x-refresh-token'] || bearer || req.cookies?.refresh_token;
     if (!refreshToken) {
       throw ApiError.unauthorized('No refresh token provided');
     }

@@ -12,6 +12,9 @@ export const getSocket = () => {
     const serverUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
     socket = io(serverUrl, {
       withCredentials: true,
+      auth: (cb) => {
+        cb({ token: localStorage.getItem('accessToken') });
+      },
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: 5,

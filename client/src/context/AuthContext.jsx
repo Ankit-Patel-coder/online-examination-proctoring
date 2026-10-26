@@ -44,21 +44,46 @@ export function AuthProvider({ children }) {
         const res = await authApi.me();
         dispatch({ type: 'SET_USER', payload: res.data.data });
       } catch {
-        // Not authenticated — clear state
+        // Not authenticated with cookies/current token — try refresh token from localStorage
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (refreshToken) {
+          try {
+            const refreshRes = await authApi.refresh({ refreshToken });
+            const data = refreshRes.data.data;
+            if (data?.accessToken) localStorage.setItem('accessToken', data.accessToken);
+            if (data?.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+            dispatch({ type: 'SET_USER', payload: data });
+            return;
+          } catch {
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+          }
+        }
         dispatch({ type: 'SET_USER', payload: null });
       }
     };
     restoreSession();
+
+    const handleSessionExpired = () => {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      dispatch({ type: 'LOGOUT' });
+    };
+    window.addEventListener('auth:session-expired', handleSessionExpired);
+    return () => window.removeEventListener('auth:session-expired', handleSessionExpired);
   }, []);
 
   /**
-   * Login and store the returned user in context.
+   * Login and store the returned user and tokens in context/storage.
    * @param {{ email, password }} credentials
    */
   const login = useCallback(async (credentials) => {
     const res = await authApi.login(credentials);
-    dispatch({ type: 'SET_USER', payload: res.data.data });
-    return res.data.data;
+    const data = res.data.data;
+    if (data?.accessToken) localStorage.setItem('accessToken', data.accessToken);
+    if (data?.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+    dispatch({ type: 'SET_USER', payload: data });
+    return data;
   }, []);
 
   /**
@@ -67,17 +92,22 @@ export function AuthProvider({ children }) {
    */
   const register = useCallback(async (data) => {
     const res = await authApi.register(data);
-    dispatch({ type: 'SET_USER', payload: res.data.data });
-    return res.data.data;
+    const resData = res.data.data;
+    if (resData?.accessToken) localStorage.setItem('accessToken', resData.accessToken);
+    if (resData?.refreshToken) localStorage.setItem('refreshToken', resData.refreshToken);
+    dispatch({ type: 'SET_USER', payload: resData });
+    return resData;
   }, []);
 
   /**
-   * Logout the current user and clear the context.
+   * Logout the current user and clear the context and storage.
    */
   const logout = useCallback(async () => {
     try {
       await authApi.logout();
     } finally {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
       dispatch({ type: 'LOGOUT' });
     }
   }, []);

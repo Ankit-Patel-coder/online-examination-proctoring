@@ -47,7 +47,7 @@ app.use(
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'X-Requested-With', 'Authorization', 'x-refresh-token'],
   })
 );
 

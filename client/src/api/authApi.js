@@ -32,6 +32,12 @@ const authApi = {
    * @param {{ currentPassword, newPassword }} data
    */
   changePassword: (data) => axiosClient.post('/auth/change-password', data),
+
+  /**
+   * Refresh tokens.
+   * @param {{ refreshToken }} [data]
+   */
+  refresh: (data = {}) => axiosClient.post('/auth/refresh', data),
 };
 
 export default authApi;

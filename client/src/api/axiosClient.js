@@ -15,6 +15,18 @@ const axiosClient = axios.create({
   timeout: 30000, // 30-second timeout
 });
 
+// ─── Request interceptor ──────────────────────────────────────────────────────
+axiosClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 // ─── Response interceptor ─────────────────────────────────────────────────────
 axiosClient.interceptors.response.use(
   response => response, // Pass successful responses through
@@ -22,22 +34,34 @@ axiosClient.interceptors.response.use(
     const originalRequest = error.config;
 
     // On 401 (authentication required) — redirect to login
-    // Exclude the /auth/me and /auth/login endpoints to avoid redirect loops
+    // Exclude the /auth/me, /auth/login, and /auth/refresh endpoints to avoid redirect loops
     if (
       error.response?.status === 401 &&
       !originalRequest._retry &&
       !originalRequest.url?.includes('/auth/login') &&
-      !originalRequest.url?.includes('/auth/me')
+      !originalRequest.url?.includes('/auth/me') &&
+      !originalRequest.url?.includes('/auth/refresh')
     ) {
       originalRequest._retry = true;
 
-      // Try the refresh endpoint first — the server will issue new cookies
+      // Try the refresh endpoint first — passing the refresh token if stored
       try {
-        await axiosClient.post('/auth/refresh');
-        // Retry the original request with the new cookies
+        const refreshToken = localStorage.getItem('refreshToken');
+        const refreshRes = await axiosClient.post('/auth/refresh', { refreshToken });
+        const data = refreshRes.data?.data;
+        if (data?.accessToken) {
+          localStorage.setItem('accessToken', data.accessToken);
+          if (data.refreshToken) {
+            localStorage.setItem('refreshToken', data.refreshToken);
+          }
+          originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+        }
+        // Retry the original request
         return axiosClient(originalRequest);
       } catch {
         // Refresh also failed — user must log in again
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
         // Dispatch a custom event so AuthContext can clear state and redirect
         window.dispatchEvent(new CustomEvent('auth:session-expired'));
       }

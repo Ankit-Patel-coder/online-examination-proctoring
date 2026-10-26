@@ -51,7 +51,11 @@ const signRefreshToken = payload =>
  */
 const authenticate = async (req, res, next) => {
   try {
-    const accessToken = req.cookies?.access_token;
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    const bearer = authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7).trim()
+      : null;
+    const accessToken = bearer || req.cookies?.access_token;
 
     if (!accessToken) {
       throw ApiError.unauthorized('No authentication token provided');
@@ -63,7 +67,7 @@ const authenticate = async (req, res, next) => {
     } catch (err) {
       // Access token expired — try to refresh
       if (err.name === 'TokenExpiredError') {
-        const refreshToken = req.cookies?.refresh_token;
+        const refreshToken = req.body?.refreshToken || req.headers['x-refresh-token'] || req.cookies?.refresh_token;
         if (!refreshToken) throw ApiError.unauthorized('Session expired, please log in again');
 
         let refreshPayload;
